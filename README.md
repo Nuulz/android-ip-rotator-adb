@@ -1,4 +1,3 @@
-```markdown
 # Experimental Android IP Rotator (ADB)
 
 ## Overview
