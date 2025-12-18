@@ -7,537 +7,603 @@
 ## Español
 
 ### Contenido
-- [Descripcion general](#descripcion-general)
-- [Objetivo del experimento](#objetivo-del-experimento)
+- [Descripción general](#descripción-general)
+- [Quickstart (2 minutos)](#quickstart-2-minutos)
+- [Descargas (Windows .exe)](#descargas-windows-exe)
+- [Motivación](#motivación)
 - [Entorno de pruebas real](#entorno-de-pruebas-real)
-- [Funcionamiento del script](#funcionamiento-del-script)
-- [Modos de prueba implementados](#modos-de-prueba-implementados)
-- [Resultados observados (IP publica)](#resultados-observados-ip-publica)
-- [Captura y analisis de logs](#captura-y-analisis-de-logs)
-- [Hallazgos clave en los logs](#hallazgos-clave-en-los-logs)
-- [Resultados resumidos](#resultados-resumidos)
-- [Nota sobre ADB y modo avion](#nota-sobre-adb-y-modo-avion)
-- [Reproducibilidad](#reproducibilidad)
-- [Conclusion principal](#conclusion-principal)
-- [Lineas de investigacion futura](#lineas-de-investigacion-futura)
-- [Notas importantes](#notas-importantes)
-- [Creditos](#creditos)
+- [Arquitectura de alto nivel](#arquitectura-de-alto-nivel)
+- [Qué hace este proyecto](#qué-hace-este-proyecto)
+- [Qué NO hace este proyecto](#qué-no-hace-este-proyecto)
+- [Metodología experimental](#metodología-experimental)
+- [Modos de prueba](#modos-de-prueba)
+- [Resultados observados](#resultados-observados)
+- [Análisis de logs de radio](#análisis-de-logs-de-radio)
+- [Conclusión principal](#conclusión-principal)
+- [Uso básico](#uso-básico)
+- [Dependencias](#dependencias)
+- [Build local (Windows)](#build-local-windows)
+- [CI/CD (GitHub Actions)](#cicd-github-actions)
+- [Documentación extendida](#documentación-extendida)
+- [Ética y alcance](#ética-y-alcance)
+- [Créditos](#créditos)
 - [Licencia](#licencia)
+- [Nota final](#nota-final)
 
 ---
 
-### Descripcion general
+## Descripción general
 
-Este repositorio documenta una **investigacion tecnica real y reproducible** cuyo objetivo es analizar si es posible forzar la **rotacion de una direccion IPv4 publica** utilizando un telefono Android conectado a un computador mediante **USB tethering**, controlando el estado de red **exclusivamente desde el PC usando ADB**, sin acceso root y sin aplicaciones firmadas como sistema.
+Este repositorio documenta una **investigación técnica real y reproducible** cuyo objetivo es analizar si es posible forzar la **rotación de una dirección IPv4 pública** utilizando un teléfono Android conectado a un computador mediante **USB tethering**, controlando el estado de red **exclusivamente desde el PC usando ADB**, sin acceso root y sin aplicaciones firmadas como sistema.
 
-Este proyecto **no es una herramienta de rotacion de IP**.  
-Es un experimento para documentar **los limites reales del sistema Android, del modem y del operador movil (CGNAT)**.
+Este proyecto **NO es una herramienta de anonimato ni de evasión**.  
+Es un experimento diseñado para **entender y documentar los límites reales** de:
 
-El valor del repositorio esta en la **honestidad tecnica**: mostrar que funciona, que no, y por que.
+- Android (framework y radio)
+- ADB
+- El módem
+- El operador móvil (CGNAT)
 
----
-
-### Objetivo del experimento
-
-La hipotesis inicial fue:
-
-> Si se corta completamente la conexion movil y se vuelve a levantar, el operador deberia asignar una nueva IP publica.
-
-El objetivo fue comprobar si ese ciclo puede forzarse **unicamente desde ADB**, sin interaccion manual una vez iniciada la prueba, y validar el resultado mediante **mediciones externas (IP publica)** y **logs internos del sistema**.
+El valor del repositorio está en la **honestidad técnica**: mostrar qué funciona, qué no funciona y por qué.
 
 ---
 
-### Entorno de pruebas real
+## Quickstart (2 minutos)
 
-- **Dispositivo:** Redmi Note 13 Pro Plus
-- **Sistema operativo:** HyperOS (Xiaomi / MIUI-based)
-- **Opciones de desarrollador:**
-  - USB Debugging habilitado
-  - **USB Debugging (Security settings) habilitado**
-- **Conectividad:** USB tethering
-- **Operador movil:** IPv4 bajo CGNAT
-- **Sistema operativo del PC:** Windows
-- **Herramientas:** ADB + Python 3.x
-- **Restricciones del experimento:**
-  - Sin root
-  - Sin VPN / proxies
-  - Sin apps de sistema
-  - Sin cambios de APN
-  - Sin interaccion manual durante la ejecucion automatica
+### Requisitos
+- **Python 3.11+**
+- **ADB (Android platform-tools)** instalado y disponible en `PATH`
+- Teléfono Android con **USB Debugging** habilitado
+- (Según el modo) **USB tethering** activo
+
+### Instalación
+```
+git clone https://github.com/Nuulz/android-ip-rotator-adb.git
+cd android-ip-rotator-adb
+python -m pip install --upgrade pip
+pip install -r requirements.txt
+```
+
+### Ejecutar
+```
+python menu.py
+```
 
 ---
 
-### Funcionamiento del script
+## Descargas (Windows .exe)
 
-El script (`check_ip_data.py`) sigue un flujo controlado y medible:
+Este repositorio genera un ejecutable de Windows automáticamente cuando se crea un **Release**.
 
-1. Obtener la IP publica actual desde el PC
-2. Ejecutar cambios de estado de red en el telefono via ADB
-3. Esperar la reconexion
-4. Obtener nuevamente la IP publica
+ir a **Releases** y descargar `android-ip-rotator.exe`.
+
+
+## Motivación
+
+Existe una creencia común de que activar y desactivar el modo avión en Android siempre provoca un cambio de IP pública.  
+Este proyecto busca responder, con evidencia técnica, a las siguientes preguntas:
+
+- ¿Es posible forzar ese comportamiento únicamente desde ADB?
+- ¿El toggle vía ADB es equivalente al toggle manual de la interfaz?
+- ¿Qué papel juega el operador móvil (CGNAT) en la persistencia de la IP?
+- ¿Qué ocurre internamente a nivel de radio cuando la IP cambia o no cambia?
+
+La meta no es “hacer que funcione”, sino **entender como funciona**.
+
+---
+
+## Entorno de pruebas
+
+| Componente | Valor |
+| --- | --- |
+| Dispositivo | Redmi Note 13 Pro Plus |
+| Sistema operativo | HyperOS (basado en MIUI) |
+| Operador móvil | Red móvil IPv4 bajo CGNAT |
+| Conectividad | USB tethering |
+| Sistema del PC | Windows |
+| Root | No |
+| VPN / Proxy | No |
+| ADB | Activado |
+| USB Debugging (Security settings) | Activado |
+
+---
+
+## Arquitectura
+
+```
+PC (Python CLI)
+└─ ADB
+└─ Android Framework
+└─ Radio / RIL
+└─ Red del operador (CGNAT)
+```
+
+El script actúa **desde el PC**, sin interacción manual durante la ejecución automática.
+
+---
+
+## Qué hace este proyecto
+
+- Ejecuta experimentos controlados de reconexión de red
+- Captura logs del subsistema de radio (`logcat -b radio`)
+- Extrae eventos relevantes (attach/detach, cambios de estado)
+- Registra ejecuciones (“runs”) de forma trazable
+- Exporta resultados en JSON y CSV
+- Permite limpiar logs de forma segura
+- Documenta explícitamente las limitaciones del sistema
+
+---
+
+## Qué NO hace este proyecto
+
+- No garantiza rotación de IP
+- No evade CGNAT
+- No es una herramienta de anonimato
+- No utiliza exploits
+- No modifica el firmware
+- No ejecuta control profundo del módem
+
+---
+
+## Metodología experimental
+
+Cada experimento sigue este flujo:
+
+1. Medir la IP pública desde el PC
+2. Ejecutar cambios de estado de red vía ADB
+3. Esperar reconexión
+4. Medir la IP pública nuevamente
 5. Comparar resultados
-
-El **criterio de exito** es exclusivamente el **cambio observable de la IP publica**.
-
----
-
-### Modos de prueba implementados
-
-#### Modo A — Modo avion via ADB
-
-```
-airplane_mode ON -> esperar -> airplane_mode OFF
-```
-
-#### Modo B — Modo avion + datos moviles via ADB
-
-```
-airplane_mode ON -> datos OFF -> esperar -> airplane_mode OFF -> datos ON
-```
-
-Ambos modos se ejecutan sin tocar el telefono una vez iniciado el script.
+6. Capturar y analizar logs de radio
+7. Registrar la ejecución en un índice persistente
 
 ---
 
-### Resultados observados (IP publica)
+## Modos de prueba
 
-> Nota: Los valores de IP mostrados aqui son ejemplos observados durante pruebas. Si prefieres, puedes enmascararlos (ej. `190.130.xxx.xxx`) para publicar el repo.
-
-#### Toggle manual (UI del sistema)
-
+### Modo A — Modo avión vía ADB
 ```
-IP BEFORE: 190.130.101.73
-IP AFTER : 190.130.99.67
+airplane_mode ON → esperar → airplane_mode OFF
 ```
-
-#### Toggle via ADB (console)
-
-```
-IP BEFORE: 190.130.99.67
-IP AFTER : 190.130.99.67
-```
+Prueba si un corte lógico de radio es suficiente.
 
 ---
 
-### Captura y analisis de logs
+### Modo B — Modo avión + datos móviles vía ADB
+```
+airplane_mode ON → datos OFF → esperar → airplane_mode OFF → datos ON
+```
+Intenta forzar una desconexión más profunda.
 
-Para analizar el comportamiento interno del sistema se utilizaron logs del buffer `radio` de Android.
+---
 
-#### Comandos usados (Windows)
+## Resultados observados
 
-**Limpiar buffer antes de cada prueba:**
+### Toggle manual (UI del sistema)
+```
+IP BEFORE: 190.130.xxx.xx
+IP AFTER : 190.130.xxx.xx
+```
+✔ Se observa renegociación completa del radio  
+✔ Cambios de canal y ancho de banda  
+✔ Nueva sesión de red  
+✔ Nueva IP pública asignada  
+
+---
+
+### Toggle vía ADB
+```
+IP BEFORE: 190.130.xxx.xx
+IP AFTER : 190.130.xxx.xx
+```
+✘ No hay renegociación física consistente  
+✘ El módem no se desancla completamente de la celda  
+✘ El operador mantiene la misma sesión CGNAT  
+
+---
+
+## Análisis de logs de radio
+
+Se utilizan logs del buffer `radio`:
+
 ```
 adb logcat -b radio -c
+adb logcat -b radio -v time | findstr /i "ServiceState RIL RADIO airplane"
 ```
 
-**Capturar log del toggle manual (UI):**
-```
-adb logcat -b radio -v time | findstr /i "ServiceState RIL RADIO airplane" > radio_test_MANUAL.log
-```
+Hallazgos clave:
 
-**Capturar log del toggle via ADB:**
-```
-adb logcat -b radio -c
-adb logcat -b radio -v time | findstr /i "ServiceState RIL RADIO airplane" > radio_test_CONSOLE.log
-```
-
-**Tiempos de espera** entre activacion y desactivacion del modo avion: **40 a 60 segundos**.
-
-> Nota importante: `logcat` usa buffers circulares/persistentes; limpiar antes de cada iteracion fue critico para evitar analizar eventos antiguos.
+- El toggle manual dispara eventos completos del framework y RIL
+- El toggle vía ADB suele modificar solo flags lógicos
+- Sin detach físico, la IP pública permanece “sticky”
 
 ---
 
-### Hallazgos clave en los logs
+## Conclusión principal
 
-#### Toggle manual (UI)
+Este **no es un problema del script**.
 
-Indicadores de renegociacion real del estado de radio:
+Es una **limitación arquitectónica intencional de android**:
 
-- Cambios en `mChannelNumber`
-- Cambios en `mCellBandwidths`
-- Variaciones en carrier aggregation
-- Tear down completo de data bearers
-- Nuevo attach a la red movil
+- ADB está sandboxeado por diseño
+- El control profundo del radio requiere permisos de sistema
+- La IP pública depende del attach físico y de políticas del operador
+- Bajo CGNAT, las reconexiones rápidas reutilizan contexto de red
 
-<details>
-  <summary>Ejemplo de lineas relevantes (UI)</summary>
-
-  ```
-  [ServiceState] mChannelNumber=675
-  [ServiceState] mCellBandwidths=
-  [DataNetworkController] Tear down all data networks (AIRPLANE_MODE)
-  ```
-</details>
-
-#### Toggle via ADB
-
-Observado de forma consistente:
-
-- Cambio del flag `airplane_mode_on`
-- Reconexion rapida
-- Ausencia de renegociacion fisica
-- Sin cambios de canal/banda
-
-Resultado:
-
-- El modem no se desancla completamente de la celda
-- El operador mantiene el mismo contexto de red
-- La IP publica permanece sin cambios bajo CGNAT
+ADB **no puede garantizar** una rotación de IP sin acceso a APIs internas o control del RIL.
 
 ---
 
-### Resultados resumidos
-
-| Metodo | Iteraciones | Tiempo de espera | ¿Cambia IP publica? |
-|---|---:|---:|---|
-| Manual (UI) | multiples | 40–60 s | Si |
-| ADB (console) | multiples | 40–60 s | No |
-
----
-
-### Nota sobre ADB y modo avion
-
-Existe la creencia comun de que ejecutar:
+## Uso básico
 
 ```
-settings put global airplane_mode_on 1
+python menu.py
 ```
 
-equivale al toggle manual del modo avion.
+El menú interactivo permite:
 
-Las pruebas y los logs muestran que esto no es necesariamente cierto.
-
-Este comando modifica el estado logico del sistema, pero no garantiza la ejecucion del flujo completo de apagado/encendido del radio, el cual depende de eventos del framework y del RIL protegidos por permisos de sistema y puede variar segun el OEM y la version de Android.
-
----
-
-### Reproducibilidad
-
-- Pruebas ejecutadas multiples veces
-- Tiempos de espera controlados (40–60 segundos)
-- Dos metodos comparados (manual vs ADB)
-- Dos logs independientes generados por metodo
-- Buffer de logcat limpiado antes de cada iteracion
-- Criterio de exito claramente definido (cambio de IP publica)
+- Ejecutar experimentos
+- Capturar logs
+- Analizar resultados
+- Extraer eventos
+- Limpiar ejecuciones de forma segura
 
 ---
 
-### Conclusion principal
+## Dependencias
 
-Este no es un problema de scripting.
+`requirements.txt`:
+- `requests>=2.31.0`
+- `pyinstaller>=5.14.1`
 
-Es una limitacion arquitectonica intencional:
-
-- ADB puede modificar estados logicos del sistema
-- No tiene permisos para ejecutar el flujo completo de apagado/encendido del modem
-- El toggle manual dispara eventos del framework y del RIL que ADB no replica
-- Bajo CGNAT, la IP publica depende del estado fisico del attach a la red
-
-ADB no puede garantizar una rotacion de IP sin acceso a permisos de sistema.
+> Nota: el workflow instala además `pillow` para generar el ícono.
 
 ---
 
-### Lineas de investigacion futura
+## Build local (Windows)
 
-- Correlacion entre cambios de IP y cambios de puerto remoto
-- Emision de broadcasts adicionales relacionados con airplane mode
-- Uso de APIs ocultas de Telephony
-- Shizuku para elevacion controlada de permisos
-- Hooks de framework (LSPosed / Xposed)
-- Analisis directo del RIL del fabricante
-- Diferencias entre OEMs y versiones de Android
-- Politicas de asignacion IP del operador movil
+```
+pip install -r requirements.txt
+pip install pyinstaller pillow
+python tools/make_icon.py
+pyinstaller --onefile --name android-ip-rotator --icon icon.ico menu.py
+```
 
 ---
 
-### Notas importantes
+## CI/CD (GitHub Actions)
 
-- HyperOS / MIUI agrega capas adicionales sobre el RIL estandar
-- Algunos comandos ADB funcionan distinto segun el fabricante
-- Este proyecto no debe usarse como herramienta de anonimato
-- Los resultados dependen tanto del sistema operativo como del operador
+Workflow: `.github/workflows/build.yml`  
+Trigger: al crear un **Release** (`on: release -> types: [created]`)  
 
 ---
 
-### Creditos
+## Documentación extendida
+
+La documentación técnica detallada (metodología, logs, eventos, CGNAT, arquitectura interna) se encuentra en la **Wiki del repositorio**:
+
+**ESTO SE SIGUE CONSTRUYENDO**
+
+https://github.com/Nuulz/android-ip-rotator-adb/wiki
+
+---
+
+## Ética y alcance
+
+Este proyecto se desarrolló con fines **educativos y de investigación**:
+
+- Todo se ejecuta en entornos controlados
+- No se afecta infraestructura de terceros
+- No se promueve evasión ni anonimato
+
+---
+
+## Créditos
 
 Proyecto desarrollado por el autor del repositorio.
 
-Herramientas de IA (ChatGPT, OpenAI) se usaron unicamente como apoyo para analisis y redaccion.  
-Toda la experimentacion, validacion y conclusiones provienen de pruebas reales sobre hardware y red.
+Herramientas de IA (ChatGPT, OpenAI) se utilizaron únicamente como apoyo para análisis, organización y redacción.  
+Toda la experimentación, validación y conclusiones provienen de pruebas reales sobre hardware y red.
 
 ---
 
-### Licencia
+## Nota final
 
-Uso libre con fines educativos y de investigacion.
+Este repositorio no intenta “ganarle al sistema”.  
+Intenta **entenderlo**.
 
 ---
 
-## English
+# English
 
-### Contents
+## Index
 - [Overview](#overview)
-- [Experiment goal](#experiment-goal)
+- [Quickstart (2 minutes)](#quickstart-2-minutes)
+- [Downloads (Windows .exe)](#downloads-windows-exe)
+- [Motivation](#motivation)
 - [Real test environment](#real-test-environment)
-- [Script flow](#script-flow)
-- [Implemented test modes](#implemented-test-modes)
-- [Observed results (Public IP)](#observed-results-public-ip)
-- [Log capture and analysis](#log-capture-and-analysis)
-- [Key findings](#key-findings)
-- [Summary table](#summary-table)
-- [Note on ADB and airplane mode](#note-on-adb-and-airplane-mode)
-- [Reproducibility](#reproducibility-1)
+- [High-level architecture](#high-level-architecture)
+- [What this project does](#what-this-project-does)
+- [What this project does NOT do](#what-this-project-does-not-do)
+- [Experimental methodology](#experimental-methodology)
+- [Test modes](#test-modes)
+- [Observed results](#observed-results)
+- [Radio log analysis](#radio-log-analysis)
 - [Main conclusion](#main-conclusion)
-- [Future research directions](#future-research-directions)
-- [Important notes](#important-notes)
+- [Basic usage](#basic-usage)
+- [Dependencies](#dependencies)
+- [Local build (Windows)](#local-build-windows)
+- [CI/CD (GitHub Actions)](#cicd-github-actions-1)
+- [Extended documentation](#extended-documentation)
+- [Ethics & scope](#ethics--scope)
 - [Credits](#credits)
 - [License](#license)
+- [Final note](#final-note)
 
 ---
 
-### Overview
+## Overview
 
-This repository documents a **real, reproducible technical investigation** aimed at evaluating whether it is possible to force **public IPv4 rotation** using an Android phone connected to a computer via **USB tethering**, controlling network state **strictly from the PC using ADB**, with no root access and no system-signed apps.
+This repository documents a **real, reproducible technical investigation** focused on whether it is possible to force **public IPv4 rotation** using an Android phone connected to a computer via **USB tethering**, controlling network state **from the PC only using ADB**, with no root access and no system-signed apps.
 
-This project **is not an IP rotation tool**.  
-It is an experiment to document **real-world limitations** imposed by Android, the modem, and the mobile carrier (CGNAT).
+This project is **NOT** an anonymity or evasion tool.  
+It is an experiment meant to **understand and document real-world limits** across:
 
-The value of this repository is **technical honesty**: showing what works, what does not, and why.
+- Android (framework + radio)
+- ADB
+- The modem
+- The mobile carrier (CGNAT)
 
----
-
-### Experiment goal
-
-Initial hypothesis:
-
-> If the mobile connection is fully dropped and brought back, the carrier should assign a new public IP.
-
-Goal: verify whether that cycle can be forced **only via ADB**, with no manual interaction once the test starts, and validate results using **external measurements (public IP)** and **internal system logs**.
+The value is **technical honesty**: showing what works, what doesn’t, and why.
 
 ---
 
-### Real test environment
+## Quickstart (2 minutes)
 
-- **Device:** Redmi Note 13 Pro Plus
-- **OS:** HyperOS (Xiaomi / MIUI-based)
-- **Developer options:**
-  - USB Debugging enabled
-  - **USB Debugging (Security settings) enabled**
-- **Connectivity:** USB tethering
-- **Carrier:** IPv4 under CGNAT
-- **PC OS:** Windows
-- **Tools:** ADB + Python 3.x
-- **Constraints:**
-  - No root
-  - No VPN / proxies
-  - No system apps
-  - No APN changes
-  - No manual interaction during automated execution
+### Requirements
+- **Python 3.11+**
+- **ADB (Android platform-tools)** installed and available in `PATH`
+- Android device with **USB Debugging** enabled
+- (Depending on the mode) **USB tethering** enabled
+
+### Install
+```
+git clone https://github.com/Nuulz/android-ip-rotator-adb.git
+cd android-ip-rotator-adb
+python -m pip install --upgrade pip
+pip install -r requirements.txt
+```
+
+### Run
+```
+python menu.py
+```
 
 ---
 
-### Script flow
+## Downloads (Windows .exe)
 
-The script (`check_ip_data.py`) follows a measurable flow:
+This repository builds a Windows executable automatically when a **Release** is created.
 
-1. Read current public IP from the PC
-2. Trigger network state changes on the phone via ADB
+go to **Releases** and download `android-ip-rotator.exe`.
+
+---
+
+## Motivation
+
+There is a widespread belief that activating airplane mode always forces a change in the public IP address.  
+This project aims to answer the following questions with technical tests:
+
+- Can this be forced using only ADB?
+- Is activating ADB equivalent to activating the user interface?
+- How does the operator's CGNAT affect the “persistent” behavior of the public IP?
+- What happens at the radio/RIL level when the IP changes (or does not change)?
+
+The goal is not to “make it work,” but to **understand how it works internally**.
+
+---
+
+## Test environment
+
+| Component | Value |
+| --- | --- |
+| Device | Redmi Note 13 Pro Plus |
+| OS | HyperOS (MIUI-based) |
+| Carrier | Mobile IPv4 under CGNAT |
+| Connectivity | USB tethering |
+| PC OS | Windows |
+| Root | No |
+| VPN / Proxy | No |
+| ADB | Enabled |
+| USB Debugging (Security settings) | Enabled |
+
+---
+
+## Architecture
+
+```
+PC (Python CLI)
+└─ ADB
+└─ Android Framework
+└─ Radio / RIL
+└─ Carrier network (CGNAT)
+```
+
+The script runs **from the PC**, with no manual interaction during automated execution.
+
+---
+
+## What this project does
+
+- Runs controlled network reconnection experiments
+- Captures radio subsystem logs (`logcat -b radio`)
+- Extracts relevant events (attach/detach, state changes)
+- Tracks runs in a persistent, traceable way
+- Exports results to JSON and CSV
+- Supports safe log clearing
+- Explicitly documents system limitations
+
+---
+
+## What this project does NOT do
+
+- Does not guarantee IP rotation
+- Does not bypass CGNAT
+- Is not an anonymity tool
+- Does not use exploits
+- Does not modify firmware
+- Does not perform deep modem control
+
+---
+
+## Experimental methodology
+
+Each experiment follows:
+
+1. Measure public IP from the PC
+2. Apply network state changes via ADB
 3. Wait for reconnection
-4. Read public IP again
+4. Measure public IP again
 5. Compare results
-
-**Success criteria:** **public IP must change**.
-
----
-
-### Implemented test modes
-
-#### Mode A — Airplane mode via ADB
-
-```
-airplane_mode ON -> wait -> airplane_mode OFF
-```
-
-#### Mode B — Airplane mode + Mobile data via ADB
-
-```
-airplane_mode ON -> data OFF -> wait -> airplane_mode OFF -> data ON
-```
-
-Both modes run without touching the phone after the script starts.
+6. Capture/analyze radio logs
+7. Persist the run in an index
 
 ---
 
-### Observed results (Public IP)
+## Test modes
 
-> Note: IP values below are examples from real tests. Consider masking them (e.g., `190.130.xxx.xxx`) before publishing.
-
-#### Manual toggle (System UI)
-
+### Mode A — Airplane mode via ADB
 ```
-IP BEFORE: 190.130.101.73
-IP AFTER : 190.130.99.67
+airplane_mode ON → wait → airplane_mode OFF
 ```
 
-#### ADB-only toggle (Console)
-
+### Mode B — Airplane mode + mobile data via ADB
 ```
-IP BEFORE: 190.130.99.67
-IP AFTER : 190.130.99.67
+airplane_mode ON → data OFF → wait → airplane_mode OFF → data ON
 ```
 
 ---
 
-### Log capture and analysis
+## Observed results
 
-To analyze internal behavior, `logcat` **radio** buffer logs were collected.
+### Manual UI toggle
+```
+IP BEFORE: 190.130.xxx.xx
+IP AFTER : 190.130.xxx.xx
+```
 
-#### Commands used (Windows)
+### ADB toggle
+```
+IP BEFORE: 190.130.xxx.xx
+IP AFTER : 190.130.xxx.xx
+```
 
-**Clear buffer before each run:**
+---
+
+## Radio log analysis
+
 ```
 adb logcat -b radio -c
+adb logcat -b radio -v time | findstr /i "ServiceState RIL RADIO airplane"
 ```
 
-**Capture manual UI toggle log:**
-```
-adb logcat -b radio -v time | findstr /i "ServiceState RIL RADIO airplane" > radio_test_MANUAL.log
-```
+Key findings:
 
-**Capture ADB toggle log:**
-```
-adb logcat -b radio -c
-adb logcat -b radio -v time | findstr /i "ServiceState RIL RADIO airplane" > radio_test_CONSOLE.log
-```
-
-**Wait time** between enabling/disabling airplane mode: **40 to 60 seconds**.
-
-> Important: `logcat` buffers are persistent/circular; clearing before each iteration prevents mixing old events into the analysis.
+- UI toggle triggers full framework + RIL flows
+- ADB toggles often change logical flags only
+- Without a real physical detach, public IP remains “sticky”
 
 ---
 
-### Key findings
+## Main conclusion
 
-#### Manual toggle (UI)
+This is **not a scripting problem**.
 
-Indicators of real radio renegotiation:
+It is an **intentional architectural limitation**:
 
-- `mChannelNumber` changes
-- `mCellBandwidths` changes
-- Carrier aggregation state variations
-- Full teardown of data bearers
-- New attach to the mobile network
+- ADB is sandboxed by design
+- Deep radio control requires system privileges
+- Public IP depends on physical attach + carrier policy
+- Under CGNAT, fast reconnects may reuse network context
 
-<details>
-  <summary>Example relevant lines (UI)</summary>
-
-  ```
-  [ServiceState] mChannelNumber=675
-  [ServiceState] mCellBandwidths=
-  [DataNetworkController] Tear down all data networks (AIRPLANE_MODE)
-  ```
-</details>
-
-#### ADB toggle
-
-Consistent observations:
-
-- `airplane_mode_on` flag changes
-- Fast “reconnect”
-- No physical renegotiation signals
-- No channel/band changes
-
-Result:
-
-- The modem does not fully detach from the cell
-- The carrier keeps the same network context
-- Public IP remains unchanged under CGNAT
+ADB **cannot guarantee** IP rotation without internal APIs or RIL-level control.
 
 ---
 
-### Summary table
-
-| Method | Iterations | Wait time | Public IP changes? |
-|---|---:|---:|---|
-| Manual (UI) | multiple | 40–60 s | Yes |
-| ADB (console) | multiple | 40–60 s | No |
-
----
-
-### Note on ADB and airplane mode
-
-A common belief is that:
+## Basic usage
 
 ```
-settings put global airplane_mode_on 1
+python menu.py
 ```
 
-is equivalent to the manual UI airplane mode toggle.
+The interactive menu can:
 
-Tests and logs show that this is not necessarily true.
-
-This command changes a logical system state, but does not guarantee the full radio shutdown/startup flow, which depends on framework/RIL events gated by system permissions and may vary across OEMs and Android versions.
-
----
-
-### Reproducibility
-
-- Multiple runs performed
-- Controlled wait time (40–60 seconds)
-- Two methods compared (manual vs ADB)
-- Two independent logs generated per method
-- `logcat` buffer cleared before each iteration
-- Clear success criteria (public IP must change)
+- Run experiments
+- Capture logs
+- Analyze results
+- Extract events
+- Safely clean runs/logs
 
 ---
 
-### Main conclusion
+## Dependencies
 
-This is not a scripting problem.
+`requirements.txt`:
+- `requests>=2.31.0`
+- `pyinstaller>=5.14.1`
 
-It is an intentional architectural limitation:
-
-- ADB can modify logical system states
-- It lacks privileges to execute a full modem shutdown/startup flow
-- Manual toggles trigger framework/RIL events ADB does not replicate
-- Under CGNAT, public IP depends on the physical attach context
-
-ADB cannot guarantee IP rotation without system-level privileges.
+> Note: CI installs `pillow` to generate the icon.
 
 ---
 
-### Future research directions
+## Local build (Windows)
 
-- Correlate public IP changes vs remote port changes
-- Emit additional airplane-mode-related broadcasts
-- Hidden Telephony APIs
-- Shizuku-based controlled privilege elevation
-- Framework hooks (LSPosed / Xposed)
-- Vendor RIL analysis
-- OEM / Android version differences
-- Carrier IP allocation policy research
+```
+pip install -r requirements.txt
+pip install pyinstaller pillow
+python tools/make_icon.py
+pyinstaller --onefile --name android-ip-rotator --icon icon.ico menu.py
+```
 
 ---
 
-### Important notes
+## CI/CD (GitHub Actions)
 
-- HyperOS / MIUI adds layers on top of standard RIL behavior
-- Some ADB commands behave differently across OEMs
-- This project must not be used as an anonymity tool
-- Results depend on both OS and carrier behavior
+Workflow: `.github/workflows/build.yml`  
+Trigger: **Release created** (`on: release -> types: [created]`)  
 
 ---
 
-### Credits
+## Extended documentation
 
-Developed by the repository author.
+Full technical documentation lives in the repository **Wiki**:
 
-AI tools (ChatGPT, OpenAI) were used only as support for analysis and writing.  
+https://github.com/Nuulz/android-ip-rotator-adb/wiki
+
+**THIS IS STILL BEING WORKED ON**
+
+---
+
+## Ethics & scope
+
+Educational + research use only:
+
+- Controlled environments only
+- No third-party infrastructure abuse
+- No evasion/anonymity promotion
+
+---
+
+## Credits
+
+Project developed by the repository author.
+
+AI tools (ChatGPT, OpenAI) were used only to support analysis, organization, and writing.  
 All experimentation, validation, and conclusions come from real hardware/network testing.
 
 ---
 
-### License
+## Final note
 
-Free to use for educational and research purposes.
+This repository is not trying to “beat the system”.  
+It is trying to **understand it**.
