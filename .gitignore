@@ -3,6 +3,34 @@
 ##
 ## Get latest from https://github.com/github/gitignore/blob/main/VisualStudio.gitignore
 
+
+# Python
+dist/
+build/
+*.exe
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.venv/
+env/
+*.ico
+# Logs and runs
+logs/
+*.log
+*.json
+*.csv
+*.png
+# Build artifacts
+dist/
+build/
+*.spec
+
+# OS
+.DS_Store
+Thumbs.db
+
+
 # User-specific files
 *.rsuser
 *.suo
