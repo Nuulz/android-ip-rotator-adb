@@ -27,7 +27,7 @@
 - [Documentación extendida](#documentación-extendida)
 - [Ética y alcance](#ética-y-alcance)
 - [Créditos](#créditos)
-- [Licencia](#licencia)
+- [Licencia](https://github.com/Nuulz/android-ip-rotator-adb/tree/main?tab=Unlicense-1-ov-file)
 - [Nota final](#nota-final)
 
 ---
@@ -337,7 +337,7 @@ Intenta **entenderlo**.
 - [Extended documentation](#extended-documentation)
 - [Ethics & scope](#ethics--scope)
 - [Credits](#credits)
-- [License](#license)
+- [License](https://github.com/Nuulz/android-ip-rotator-adb/tree/main?tab=Unlicense-1-ov-file)
 - [Final note](#final-note)
 
 ---
