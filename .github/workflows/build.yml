@@ -4,6 +4,9 @@ on:
   release:
     types: [created]
 
+permissions:
+  contents: write
+
 jobs:
   build:
     runs-on: windows-latest
@@ -36,3 +39,10 @@ jobs:
         with:
           name: android-ip-rotator-exe
           path: dist/android-ip-rotator.exe
+
+      - name: Attach executable to the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          Copy-Item dist/android-ip-rotator.exe "dist/AIT_ADB-${{ github.event.release.tag_name }}.exe"
+          gh release upload "${{ github.event.release.tag_name }}" "dist/AIT_ADB-${{ github.event.release.tag_name }}.exe" --clobber
