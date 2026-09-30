@@ -21,6 +21,8 @@ logs/
 *.json
 *.csv
 *.png
+# Capturas del README
+!docs/*.png
 # Build artifacts
 dist/
 build/
