@@ -38,6 +38,16 @@ def get_public_ip(timeout):
     return None
 
 
+def phone_wifi_on(adb_path):
+    return adb(adb_path, "shell settings get global wifi_on") == "1"
+
+
+def set_phone_wifi(adb_path, enabled):
+    # With the phone's Wi-Fi on, USB tethering exits through the home network
+    # instead of mobile data, so the public IP being measured is not the carrier's.
+    adb(adb_path, f"shell svc wifi {'enable' if enabled else 'disable'}")
+
+
 def rotation_cycle(
     adb_path,
     mode,
@@ -59,6 +69,18 @@ def rotation_cycle(
         adb(adb_path, "shell settings put global airplane_mode_on 1")
         time.sleep(airplane_wait)
         adb(adb_path, "shell settings put global airplane_mode_on 0")
+
+    elif mode == "C":
+        # `settings put global airplane_mode_on` only writes the setting (a logical flag),
+        # which is why modes A/B rarely detach the radio. `cmd connectivity airplane-mode`
+        # goes through ConnectivityService and really powers the radio off and on.
+        # Works without root on Android 12+ (tested on Android 16, where the old
+        # AIRPLANE_MODE broadcast throws SecurityException).
+        log("Mode C → cmd connectivity airplane-mode (real radio toggle)")
+
+        adb(adb_path, "shell cmd connectivity airplane-mode enable")
+        time.sleep(airplane_wait)
+        adb(adb_path, "shell cmd connectivity airplane-mode disable")
 
     elif mode == "B":
         log("Mode B → airplane → data OFF → airplane OFF → data ON")
