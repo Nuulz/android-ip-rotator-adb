@@ -186,6 +186,12 @@ Usa `adb shell cmd connectivity airplane-mode enable|disable`, que pasa por `Con
 
 Antes de empezar apaga el Wi-Fi del celular (`svc wifi disable`) y lo restaura al final: con el Wi-Fi encendido, el tethering sale por la red de la casa y la IP que se mide no es la del operador.
 
+Si el PC tiene su propio internet (cable o Wi-Fi), en Linux la IP se mide por la interfaz del tethering (`curl --interface`), así el PC no pierde conexión durante la prueba y la IP medida es la del celular.
+
+Ejecución real (Redmi Note 13 Pro+, Android 16, Claro Colombia): la IP rotó al primer intento, en 20 s.
+
+![Modo C rotando la IP al primer intento](docs/ip-rotator-modo-c.png)
+
 ---
 
 ## Resultados observados
@@ -264,6 +270,13 @@ El menú interactivo permite:
 - Analizar resultados
 - Extraer eventos
 - Limpiar ejecuciones de forma segura
+
+<details>
+<summary>Sesión completa</summary>
+
+![Sesión completa del menú con el Modo C](docs/ip-rotator-consola-completa.png)
+
+</details>
 
 ---
 
@@ -508,6 +521,12 @@ Uses `adb shell cmd connectivity airplane-mode enable|disable`, which goes throu
 
 It turns the phone's Wi-Fi off first (`svc wifi disable`) and restores it at the end: with Wi-Fi on, tethering exits through the home network and the measured IP is not the carrier's.
 
+If the PC has its own internet (Ethernet or Wi-Fi), on Linux the IP is measured through the tethering interface (`curl --interface`), so the PC never loses connectivity during the test and the measured IP is the phone's.
+
+Real run (Redmi Note 13 Pro+, Android 16, Claro Colombia): the IP rotated on the first attempt, in 20 s.
+
+![Mode C rotating the IP on the first attempt](docs/ip-rotator-modo-c.png)
+
 ---
 
 ## Observed results
@@ -575,6 +594,13 @@ The interactive menu can:
 - Analyze results
 - Extract events
 - Safely clean runs/logs
+
+<details>
+<summary>Full session</summary>
+
+![Full menu session using Mode C](docs/ip-rotator-consola-completa.png)
+
+</details>
 
 ---
 
