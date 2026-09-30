@@ -21,11 +21,41 @@ def adb(adb_path, cmd):
     return result.stdout.strip()
 
 
+def tethering_iface():
+    # Android USB tethering always hands the PC an address in 10.x.x.x. Detecting it by
+    # address (not by interface name) avoids confusing it with a regular Ethernet port.
+    # Linux only; on other systems the default route is used.
+    try:
+        out = subprocess.run(["ip", "-4", "-o", "addr"], capture_output=True, text=True, timeout=3).stdout
+    except (OSError, subprocess.SubprocessError):
+        return None
+    for line in out.splitlines():
+        parts = line.split()
+        if len(parts) >= 4 and parts[3].startswith("10."):
+            return parts[1]
+    return None
+
+
 def get_public_ip(timeout):
     services = [
         "https://api.ipify.org",
         "https://ifconfig.me/ip"
     ]
+
+    # If the PC also has its own internet (Ethernet / Wi-Fi), the default route does not go
+    # through the phone and would measure the home IP. Ask through the tethering interface
+    # instead (curl can bind to an interface by name without root).
+    iface = tethering_iface()
+    if iface:
+        for url in services:
+            try:
+                r = subprocess.run(["curl", "-s", "--interface", iface, "--max-time", str(timeout), url],
+                                   capture_output=True, text=True, timeout=timeout + 2)
+                if r.returncode == 0 and r.stdout.strip():
+                    return r.stdout.strip()
+            except (OSError, subprocess.SubprocessError):
+                pass
+        return None
 
     for url in services:
         try:
