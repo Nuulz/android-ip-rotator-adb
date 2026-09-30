@@ -4,7 +4,7 @@ import time
 import json
 import shutil
 
-from core.rotator import rotation_cycle, log
+from core.rotator import rotation_cycle, log, phone_wifi_on, set_phone_wifi
 from core.logger import start_radio_capture, stop_radio_capture
 from core.analyzer import scan_log_for_markers
 from core.events import parse_events, export_json, export_csv
@@ -194,33 +194,49 @@ def ask_adb_path():
 
 
 def ask_rotation_params():
-    mode = input("Mode (A = airplane / B = airplane+data): ").strip().upper()
-    airplane_wait = int(input("Airplane wait (seconds) [30]: ") or 30)
-    post_wait = int(input("Post reconnect wait (seconds) [5]: ") or 5)
+    mode = input("Mode (C = cmd connectivity [recommended] / A = airplane / B = airplane+data) [C]: ").strip().upper() or "C"
+    # Mode C timings are the ones that worked in practice on a CGNAT carrier
+    default_airplane, default_post = (7, 12) if mode == "C" else (30, 5)
+    airplane_wait = int(input(f"Airplane wait (seconds) [{default_airplane}]: ") or default_airplane)
+    post_wait = int(input(f"Post reconnect wait (seconds) [{default_post}]: ") or default_post)
     ip_timeout = int(input("IP request timeout (seconds) [5]: ") or 5)
-    max_attempts = int(input("Max attempts [3]: ") or 3)
+    max_attempts = int(input("Max attempts [5]: ") or 5)
+    disable_wifi = (input("Turn off the phone's Wi-Fi during the test? (Y/n): ").strip().lower() or "y") == "y"
 
-    return mode, airplane_wait, post_wait, ip_timeout, max_attempts
+    return mode, airplane_wait, post_wait, ip_timeout, max_attempts, disable_wifi
 
 
 def run_rotation(adb_path):
-    mode, airplane_wait, post_wait, ip_timeout, max_attempts = ask_rotation_params()
+    mode, airplane_wait, post_wait, ip_timeout, max_attempts, disable_wifi = ask_rotation_params()
 
-    for attempt in range(1, max_attempts + 1):
-        log(f"--- Attempt {attempt} ---")
+    wifi_was_on = disable_wifi and phone_wifi_on(adb_path)
+    if wifi_was_on:
+        log("Turning off the phone's Wi-Fi (tethering must use mobile data)")
+        set_phone_wifi(adb_path, False)
+        time.sleep(4)
 
-        if rotation_cycle(
-            adb_path=adb_path,
-            mode=mode,
-            airplane_wait=airplane_wait,
-            post_wait=post_wait,
-            ip_timeout=ip_timeout
-        ):
-            log("IP rotated successfully.")
-            return True, mode, max_attempts
+    try:
+        # Under CGNAT the carrier does not always hand out a new IP on the first
+        # reconnect, so keep cycling until it actually changes
+        for attempt in range(1, max_attempts + 1):
+            log(f"--- Attempt {attempt} ---")
 
-    log("All attempts exhausted.")
-    return False, mode, max_attempts
+            if rotation_cycle(
+                adb_path=adb_path,
+                mode=mode,
+                airplane_wait=airplane_wait,
+                post_wait=post_wait,
+                ip_timeout=ip_timeout
+            ):
+                log("IP rotated successfully.")
+                return True, mode, attempt
+
+        log("All attempts exhausted.")
+        return False, mode, max_attempts
+    finally:
+        if wifi_was_on:
+            log("Restoring the phone's Wi-Fi")
+            set_phone_wifi(adb_path, True)
 
 
 

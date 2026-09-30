@@ -177,6 +177,17 @@ Intenta forzar una desconexión más profunda.
 
 ---
 
+### Modo C — `cmd connectivity airplane-mode` (recomendado)
+```
+[Wi-Fi del celular OFF] → airplane-mode enable → 7 s → airplane-mode disable → 12 s → medir IP
+repetir hasta que la IP cambie (máx. 5) → [Wi-Fi del celular ON]
+```
+Usa `adb shell cmd connectivity airplane-mode enable|disable`, que pasa por `ConnectivityService` y **sí apaga el radio**, en vez de solo escribir el ajuste. Funciona sin root en Android 12+ (probado en Android 16, donde el broadcast `AIRPLANE_MODE` da `SecurityException`).
+
+Antes de empezar apaga el Wi-Fi del celular (`svc wifi disable`) y lo restaura al final: con el Wi-Fi encendido, el tethering sale por la red de la casa y la IP que se mide no es la del operador.
+
+---
+
 ## Resultados observados
 
 ### Toggle manual (UI del sistema)
@@ -231,6 +242,12 @@ Es una **limitación arquitectónica intencional de android**:
 - Bajo CGNAT, las reconexiones rápidas reutilizan contexto de red
 
 ADB **no puede garantizar** una rotación de IP sin acceso a APIs internas o control del RIL.
+
+### Actualización: el problema era el comando
+
+Los modos A y B usan `settings put global airplane_mode_on`, que **solo cambia el flag lógico**: eso explica que los logs no mostraran un detach real. Con `cmd connectivity airplane-mode` (Modo C) el radio sí se apaga y el operador sí termina entregando una IP nueva.
+
+Bajo CGNAT el cambio **no es determinístico**: a veces la primera reconexión recupera la misma IP. Por eso el Modo C repite ciclos cortos hasta que la IP cambie, en vez de uno largo. Este mismo método es el que uso a diario desde Goket, mi panel de red.
 
 ---
 
@@ -482,6 +499,15 @@ airplane_mode ON → wait → airplane_mode OFF
 airplane_mode ON → data OFF → wait → airplane_mode OFF → data ON
 ```
 
+### Mode C — `cmd connectivity airplane-mode` (recommended)
+```
+[phone Wi-Fi OFF] → airplane-mode enable → 7 s → airplane-mode disable → 12 s → measure IP
+repeat until the IP changes (max 5) → [phone Wi-Fi ON]
+```
+Uses `adb shell cmd connectivity airplane-mode enable|disable`, which goes through `ConnectivityService` and **really powers the radio off** instead of just writing the setting. Works without root on Android 12+ (tested on Android 16, where the `AIRPLANE_MODE` broadcast throws `SecurityException`).
+
+It turns the phone's Wi-Fi off first (`svc wifi disable`) and restores it at the end: with Wi-Fi on, tethering exits through the home network and the measured IP is not the carrier's.
+
 ---
 
 ## Observed results
@@ -527,6 +553,12 @@ It is an **intentional architectural limitation**:
 - Under CGNAT, fast reconnects may reuse network context
 
 ADB **cannot guarantee** IP rotation without internal APIs or RIL-level control.
+
+### Update: the command was the problem
+
+Modes A and B use `settings put global airplane_mode_on`, which **only flips the logical flag** — that is why the logs never showed a real detach. With `cmd connectivity airplane-mode` (Mode C) the radio really goes down and the carrier does end up assigning a new IP.
+
+Under CGNAT the change is **not deterministic**: sometimes the first reconnect gets the same IP back. That is why Mode C repeats short cycles until the IP changes, instead of one long one. It is the same method I use daily from Goket, my network panel.
 
 ---
 
